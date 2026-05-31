@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>飛行機 vs お化け</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+  :root {
+    --bg: #000010;
+    --purple: #c864ff;
+    --green: #00ff88;
+    --yellow: #ffee00;
+    --red: #ff3344;
+    --white: #ffffff;
+    --dim: #334;function endGame
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: 'Press Start 2P', monospace;
+    color: var(--white);
+    overflow: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      radial-gradient(1px 1px at 10% 20%, white 0%, transparent 100%),
+      radial-gradient(1px 1px at 30% 60%, white 0%, transparent 100%),
+      radial-gradient(1px 1px at 50% 10%, white 0%, transparent 100%),
+      radial-gradient(1px 1px at 70% 80%, white 0%, transparent 100%),
+      radial-gradient(1px 1px at 90% 40%, white 0%, transparent 100%),
+      radial-gradient(1px 1px at 20% 90%, white 0%, transparent 100%),
+      radial-gradient(1px 1px at 60% 50%, white 0%, transparent 100%),
+      radial-gradient(1px 1px at 80% 15%, white 0%, transparent 100%),
+      radial-gradient(1px 1px at 45% 75%, white 0%, transparent 100%),
+      radial-gradient(1px 1px at 15% 45%, white 0%, transparent 100%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  #ui {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 800px;
+    padding: 8px 0;
+    font-size: 12px;
+    color: var(--yellow);
+    text-shadow: 0 0 8px var(--yellow);
+  }
+
+  #canvas-wrap {
+    position: relative;
+    z-index: 1;
+    border: 2px solid var(--purple);
+    box-shadow: 0 0 20px var(--purple), inset 0 0 20px rgba(100,0,200,0.1);
+  }
+
+  canvas { display: block; background: transparent; }
+
+  #controls {
+    position: relative;
+    z-index: 1;
+    margin-top: 10px;
+    font-size: 9px;
+    color: #668;
+    text-align: center;
+    line-height: 2;
+  }
+
+  #overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,16,0.85);
+    z-index: 10;
+    gap: 24px;
+  }
+
+  #overlay h1 {
+    font-size: 28px;
+    color: var(--yellow);
+    text-shadow: 0 0 20px var(--yellow);
+    animation: pulse 1s ease-in-out infinite alternate;
+  }
+
+  #overlay p { font-size: 11px; color: var(--white); line-height: 2.2; text-align: center; }
+
+  #overlay button {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 13px;
+    background: transparent;
+    border: 2px solid var(--green);
+    color: var(--green);
+    padding: 14px 32px;
+    cursor: pointer;
+    text-shadow: 0 0 8px var(--green);
+    box-shadow: 0 0 12px var(--green);
+    transition: all 0.2s;
+    animation: blink 1.2s step-end infinite;
+  }
+
+  #overlay button:hover {
+    background: var(--green);
+    color: #000;
+    text-shadow: none;
+  }
+
+  @keyframes pulse {
+    from { opacity: 0.7; transform: scale(0.98); }
+    to   { opacity: 1;   transform: scale(1.02); }
+  }
+  @keyframes blink {
+    0%,100% { opacity: 1; }
+    50%      { opacity: 0.3; }
+  }
+</style>
+</head>
+<body>
+
+<div id="ui">
+  <span>SCORE: <span id="score-display">0</span></span>
+  <span>飛行機 vs お化け</span>
+  <span>LIVES: <span id="lives-display">３</span></span>
+</div>
+
+<div id="canvas-wrap">
+  <canvas id="gameCanvas" width="800" height="560"></canvas>
+  <div id="overlay">
+    <h1>飛行機 vs お化け</h1>
+    <p>
+      ← → キーで移動<br>
+      スペースキーで弾を発射<br>
+      お化けを全滅させろ！
+    </p>
+    <button onclick="startGame()">▶ スタート</button>
+  </div>
+</div>
+
+<div id="controls">
+  ← → : 移動 &nbsp;|&nbsp; SPACE : 発射
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+
+let score = parseInt(localStorage.getItem('gameScore') || '0');
+let lives = 3;
+let gameRunning = false;
+
+const player = { x: 375, y: 500, w: 50, h: 50, speed: 6 };
+
+let bullets = [];
+let enemyBullets = [];
+let enemies = [];
+
+let enemyDx = 0.8;
+const ENEMY_DROP = 12;
+
+const ENEMY_TYPES = {
+  ghost: {
+    hp: 2,
+    bulletSpeed: 2,
+    fireRate: 0.002,
+    pattern: "straight"
+  },
+  slime: {
+    hp: 1,
+    bulletSpeed: 1,
+    fireRate: 0.00001,
+    pattern: "slowWave"
+  },
+  bat: {
+    hp: 1,
+    bulletSpeed: 3,
+    fireRate: 0.001,
+    pattern: "fastCurve"
+  }
+};
+
+const keys = {};
+document.addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (e.code === 'Space') {
+    e.preventDefault();
+    if (gameRunning) shoot();
+  }
+});
+document.addEventListener('keyup', e => keys[e.code] = false);
+
+function initEnemies() {
+  enemies = [];
+  const types = Object.keys(ENEMY_TYPES);
+
+  for (let i = 0; i < 8; i++) {
+    for (let j = 0; j < 5; j++) {
+      const type = types[Math.floor(Math.random() * types.length)];
+      enemies.push({
+        x: i * 80 + 60,
+        y: j * 55 + 40,
+        w: 40,
+        h: 40,
+        type: type,
+        hp: ENEMY_TYPES[type].hp
+      });
+    }
+  }
+}
+
+function drawGhost(x, y, frame) {
+  ctx.save();
+  ctx.shadowColor = '#c864ff';
+  ctx.shadowBlur = 12;
+
+  ctx.fillStyle = '#c864ff';
+  ctx.beginPath();
+  ctx.ellipse(x + 20, y + 20, 20, 22, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  for (let i = 0; i < 3; i++) {
+    ctx.beginPath();
+    const bx = x + 8 + i * 10;
+    const by = frame % 20 < 10 ? y + 38 : y + 36;
+    ctx.arc(bx, by, 7, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.fillStyle = '#fff';
+  ctx.shadowBlur = 0;
+  ctx.beginPath(); ctx.arc(x + 13, y + 16, 5, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(x + 27, y + 16, 5, 0, Math.PI * 2); ctx.fill();
+
+  ctx.fillStyle = '#222';
+  ctx.beginPath(); ctx.arc(x + 14, y + 17, 2, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(x + 28, y + 17, 2, 0, Math.PI * 2); ctx.fill();
+
+  ctx.restore();
+}
+
+function drawSlime(x, y) {
+  ctx.save();
+  ctx.fillStyle = '#44ff44';
+  ctx.shadowColor = '#44ff44';
+  ctx.shadowBlur = 12;
+
+  ctx.beginPath();
+  ctx.ellipse(x + 20, y + 22, 20, 18, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.arc(x + 13, y + 18, 4, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(x + 27, y + 18, 4, 0, Math.PI * 2); ctx.fill();
+
+  ctx.fillStyle = '#222';
+  ctx.beginPath(); ctx.arc(x + 14, y + 19, 2, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(x + 28, y + 19, 2, 0, Math.PI * 2); ctx.fill();
+
+  ctx.restore();
+}
+
+function drawBat(x, y, frame) {
+  ctx.save();
+  ctx.fillStyle = '#8888ff';
+  ctx.shadowColor = '#8888ff';
+  ctx.shadowBlur = 10;
+
+  ctx.beginPath();
+  ctx.ellipse(x + 20, y + 20, 16, 14, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  const wingY = frame % 20 < 10 ? y + 10 : y + 14;
+  ctx.beginPath();
+  ctx.moveTo(x + 20, y + 20);
+  ctx.lineTo(x, wingY);
+  ctx.lineTo(x + 40, wingY);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.arc(x + 14, y + 16, 3, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(x + 26, y + 16, 3, 0, Math.PI * 2); ctx.fill();
+
+  ctx.restore();
+}
+
+function shoot() {
+  if (bullets.length < 3) {
+    bullets.push({ x: player.x + 22, y: player.y, w: 5, h: 14 });
+  }
+}
+
+let frame = 0;
+
+function update() {
+  if (!gameRunning) return;
+  frame++;
+
+  if (keys['ArrowLeft'] && player.x > 0) player.x -= player.speed;
+  if (keys['ArrowRight'] && player.x < W - player.w) player.x += player.speed;
+
+  bullets = bullets.filter(b => b.y > -10);
+  bullets.forEach(b => b.y -= 9);
+
+  let turn = false;
+  enemies.forEach(e => {
+    e.x += enemyDx;
+    if (e.x <= 0 || e.x >= W - e.w - 10) turn = true;
+  });
+  if (turn) {
+    enemyDx *= -1;
+    enemies.forEach(e => e.y += ENEMY_DROP);
+  }
+
+  enemies.forEach(e => {
+    const info = ENEMY_TYPES[e.type];
+    if (Math.random() < info.fireRate) {
+      enemyBullets.push({
+        x: e.x + 20,
+        y: e.y + 40,
+        w: 5,
+        h: 12,
+        type: e.type,
+        frame: 0
+      });
+    }
+  });
+
+  enemyBullets = enemyBullets.filter(eb => eb.y < H + 10);
+  enemyBullets.forEach((b, i) => {
+    const info = ENEMY_TYPES[b.type];
+    b.frame++;
+
+    if (info.pattern === "straight") {
+      b.y += info.bulletSpeed;
+    } else if (info.pattern === "slowWave") {
+      b.y += info.bulletSpeed;
+      b.x += Math.sin(b.frame * 0.1) * 2;
+    } else if (info.pattern === "fastCurve") {
+      b.y += info.bulletSpeed;
+      b.x += Math.sin(b.frame * 0.25) * 4;
+    }
+
+    if (rectsOverlap(b, player)) {
+      score = Math.max(0, score - 50);
+      enemyBullets.splice(i, 1);
+      lives--;
+      if (lives <= 0) endGame(false);
+    }
+  });
+
+  bullets.forEach((b, bi) => {
+    enemies.forEach((e, ei) => {
+      if (rectsOverlap(b, e)) {
+        bullets.splice(bi, 1);
+        e.hp--;
+        if (e.hp <= 0) {
+          enemies.splice(ei, 1);
+          score += 2;
+        }
+      }
+    });
+  });
+
+  if (enemies.some(e => e.y > 480)) endGame(false);
+  if (enemies.length === 0) endGame(true);
+}
+
+function rectsOverlap(a, b) {
+  return a.x < b.x + b.w && a.x + a.w > b.x &&
+         a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+
+  bullets.forEach(b => {
+    ctx.save();
+    ctx.fillStyle = '#ff3344';
+    ctx.shadowColor = '#ff3344';
+    ctx.shadowBlur = 8;
+    ctx.fillRect(b.x, b.y, b.w, b.h);
+    ctx.restore();
+  });
+
+  enemyBullets.forEach(eb => {
+    ctx.save();
+    ctx.fillStyle = '#ffee00';
+    ctx.shadowColor = '#ffee00';
+    ctx.shadowBlur = 8;
+    ctx.fillRect(eb.x, eb.y, eb.w, eb.h);
+    ctx.restore();
+  });
+
+  enemies.forEach(e => {
+    if (e.type === 'ghost') drawGhost(e.x, e.y, frame);
+    else if (e.type === 'slime') drawSlime(e.x, e.y);
+    else if (e.type === 'bat') drawBat(e.x, e.y, frame);
+  });
+
+  drawPlayer(player.x, player.y);
+
+  ctx.save();
+  ctx.strokeStyle = '#334';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, H - 10);
+  ctx.lineTo(W, H - 10);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawPlayer(x, y) {
+  ctx.save();
+  ctx.fillStyle = '#00ff88';
+  ctx.shadowColor = '#00ff88';
+  ctx.shadowBlur = 10;
+
+  ctx.beginPath();
+  ctx.moveTo(x + 25, y);
+  ctx.lineTo(x, y + 38);
+  ctx.lineTo(x + 50, y + 38);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillRect(x + 5, y + 22, 40, 8);
+
+  ctx.beginPath();
+  ctx.moveTo(x + 25, y + 33);
+  ctx.lineTo(x + 15, y + 44);
+  ctx.lineTo(x + 35, y + 44);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = '#ffee00';
+  ctx.shadowColor = '#ffee00';
+  ctx.shadowBlur = 15;
+  ctx.beginPath();
+  ctx.arc(x + 25, y + 45, 4, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function updateUI() {
+  document.getElementById('score-display').textContent = score;
+  const livesMap = ['０','１','２','３','４','５'];
+  document.getElementById('lives-display').textContent =
+    livesMap[Math.max(0, lives)] || '０';
+}
+
+function endGame(cleared) {
+  gameRunning = false;
+  localStorage.setItem('gameScore', score);
+
+  const overlay = document.getElementById('overlay');
+  overlay.innerHTML = `
+    <h1 style="color:${cleared ? '#ffee00' : '#ff3344'}; text-shadow: 0 0 20px ${cleared ? '#ffee00' : '#ff3344'}">
+      ${cleared ? 'CLEAR!!' : 'GAME OVER'}
+    </h1>
+    <p style="font-size:14px; color:#fff; text-shadow:0 0 8px #fff;">
+      SCORE: ${score}
+    </p>
+    <button onclick="startGame()">▶ もう一度</button>
+  `;
+  overlay.style.display = 'flex';
+  if (cleared) {
+    window.parent.postMessage({ type: 'stageClear' }, '*');
+  }
+}
+
+function startGame() {
+  score = parseInt(localStorage.getItem('gameScore') || '0');
+  lives = 3;
+  bullets = [];
+  enemyBullets = [];
+  player.x = 375;
+  initEnemies();
+  updateUI();
+  document.getElementById('overlay').style.display = 'none';
+  gameRunning = true;
+}
+
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+updateUI();
+loop();
+</script>
+</body>
+</html>

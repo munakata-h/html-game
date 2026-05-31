@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ゲームランチャー & AI実況ナビゲーター</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Meiryo', sans-serif;
+            background-color: #f0f0f0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+        #game-container {
+            width: 1200px;
+            height: 800px;
+            border: 2px solid #ccc;
+            background-color: #fff;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background-color: #f0f0f0;
+            width: 1000px;
+            padding: 50px;
+            border-radius: 8px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+            text-align: center;
+        }
+        .modal-title {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            color: #333;
+            border-bottom: 2px solid #0078d7;
+            padding-bottom: 10px;
+        }
+        .modal-text {
+            font-size: 18px;
+            font-weight: bold;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            margin-bottom: 40px;
+            text-align: left;
+            display: inline-block;
+            max-width: 90%;
+        }
+        .modal-btn {
+            font-size: 16px;
+            font-weight: bold;
+            background-color: #0078d7;
+            color: white;
+            border: none;
+            padding: 15px 50px;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+        .modal-btn:hover { background-color: #005a9e; }
+        .modal-btn:disabled { background-color: #cccccc; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <iframe id="game-frame" src="about:blank"></iframe>
+    </div>
+    <div id="modal-area"></div>
+
+    <script>
+        // ==========================================
+        // APIキー設定
+        // ==========================================
+        const API_KEY = "AIzaSyDxWMODebhf-V5_d72WXCez3aMJpAejegs";
+
+        // ステージ設定
+        const STAGES = [
+            { id: 1, file: "game001.html", title: "STAGE 1", msg: "【第１ステージ】\n\n新しい冒険の始まりだ！ゴールを目指して頑張ろう！" },
+            { id: 2, file: "game002.html", title: "STAGE 2", msg: "【第２ステージ】\n\nインベーダー戦！スペースキー、方向キーを準備！" },
+            { id: 3, file: "game003.html", title: "STAGE 3", msg: "【第３ステージ】\n\nパックマン！方向キーを準備！" }
+        ];
+
+        let currentStageIndex = 0;
+
+        // ==========================================
+        // スコア管理（LocalStorage）
+        // ==========================================
+        const ScoreManager = {
+            get: () => localStorage.getItem("game_score") || "0",
+            set: (value) => localStorage.setItem("game_score", value)
+        };
+
+        // ==========================================
+        // 今日の日付を取得するユーティリティ
+        // ==========================================
+        function getTodayString() {
+            const now = new Date();
+            const year  = now.getFullYear();
+            const month = now.getMonth() + 1;
+            const day   = now.getDate();
+            const weekdays = ["日", "月", "火", "水", "木", "金", "土"];
+            const week  = weekdays[now.getDay()];
+            return `${year}年${month}月${day}日（${week}曜日）`;
+        }
+
+        // ==========================================
+        // スコアに応じたコメント
+        // ==========================================
+        function getScoreComment(score) {
+            const n = parseInt(score, 10);
+            if (n < 60) return "プレイヤーのスコアがまだ低めなことを、ユーモアを交えて優しく励ましてください。";
+            if (n < 130) return "プレイヤーのスコアがなかなか良いことを、テンション高めに褒めてください。";
+            if (n < 200) return "プレイヤーのスコアがかなり上手いことを、驚きとともに称えてください。";
+            return "プレイヤーのスコアが超一流レベルであることを、大げさなくらい大絶賛してください。";
+        }
+
+        // ==========================================
+        // ランダム話題テンプレート（日付を埋め込む）
+        // ==========================================
+        function getRandomTopic(today) {
+            const topics = [
+                `今日は${today}です。日本の最新ニュースを一つ、面白おかしく250字以内で紹介してください。`,
+                `今日は${today}です。埼玉県の今日の天気を、天気予報キャスター風に250字以内で伝えてください。`,
+                `今日は${today}です。最近話題のテクノロジーを、初心者にもわかるように面白く250字以内で紹介してください。`,
+                `へぇ〜と思える面白い雑学を一つ、250字以内でテンポよく教えてください。`,
+                `今日は${today}です。最近のゲーム業界のニュースを、ゲーマー目線で250字以内に面白くまとめてください。`
+            ];
+            return topics[Math.floor(Math.random() * topics.length)];
+        }
+
+        // ==========================================
+        // AI実況（Gemini API 呼び出し）
+        // ==========================================
+        async function fetchAIBriefing(score) {
+            const today   = getTodayString();
+            const comment = getScoreComment(score);
+            const topic   = getRandomTopic(today);
+            const closing = "最後に『それでは次のステージを開始します！』と一言締めくくってください。";
+
+            const prompt =
+                `あなたはゲーム実況が得意な陽気なナビゲーターです。\n` +
+                `プレイヤーのスコアは ${score} 点です。\n\n` +
+                `【スコアへのコメント】\n${comment}\n\n` +
+                `【今日のトピック】\n${topic}\n\n` +
+                `【締め】\n${closing}\n\n` +
+                `全体を自然でテンポよく、面白い語り口でまとめてください。`;
+
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`;
+
+            try {
+                const response = await fetch(url, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                });
+                const data = await response.json();
+                return data.candidates[0].content.parts[0].text;
+            } catch (e) {
+                return `通信エラーのため、予備情報で進行します。\n(エラー内容: ${e})`;
+            }
+        }
+
+        // ==========================================
+        // UI制御（ポップアップ表示）
+        // ==========================================
+        function showSimplePopup(title, message, callback) {
+            const modalArea = document.getElementById("modal-area");
+            modalArea.innerHTML = `
+                <div class="modal-overlay">
+                    <div class="modal-content">
+                        <div class="modal-title">${title}</div>
+                        <div class="modal-text" style="text-align:center;">${message}</div>
+                        <div><button class="modal-btn" id="modal-ok-btn">OK</button></div>
+                    </div>
+                </div>
+            `;
+            document.getElementById("modal-ok-btn").onclick = () => {
+                modalArea.innerHTML = "";
+                if (callback) callback();
+            };
+        }
+
+        async function showAITransitionPopup(score, callback) {
+            const modalArea = document.getElementById("modal-area");
+            modalArea.innerHTML = `
+                <div class="modal-overlay">
+                    <div class="modal-content">
+                        <div class="modal-title">AI実況ナビゲーター</div>
+                        <div class="modal-text" id="ai-text">【 ステージ終了 】\n\n現在のスコア： ${score} 点\n\nAIナビゲーターが情報取得中...</div>
+                        <div><button class="modal-btn" id="ai-ok-btn" disabled>準備中...</button></div>
+                    </div>
+                </div>
+            `;
+
+            const aiMsg = await fetchAIBriefing(score);
+            document.getElementById("ai-text").innerText = aiMsg;
+            const btn = document.getElementById("ai-ok-btn");
+            btn.innerText = "ＯＫ！　次へ進む";
+            btn.disabled = false;
+            btn.onclick = () => {
+                modalArea.innerHTML = "";
+                if (callback) callback();
+            };
+        }
+
+        // ==========================================
+        // メインゲーム進行フロー
+        // ==========================================
+        function proceedWorkflow() {
+            if (currentStageIndex < STAGES.length) {
+                const stage = STAGES[currentStageIndex];
+                showSimplePopup(stage.title, stage.msg, () => {
+                    document.getElementById("game-frame").src = stage.file;
+                });
+            } else {
+                showSimplePopup(
+                    "ALL CLEAR!",
+                    `お疲れ様！！\nゲーム終了です！\n\n最終スコア: ${ScoreManager.get()} 点`,
+                    () => { document.getElementById("game-frame").src = "about:blank"; }
+                );
+            }
+        }
+
+        window.onStageClear = function() {
+            let rawScore = localStorage.getItem("gameScore") || localStorage.getItem("game_score") || "0";
+            localStorage.setItem("game_score", rawScore);
+            const score = parseInt(rawScore, 10);
+
+            if (currentStageIndex < STAGES.length - 1) {
+                showAITransitionPopup(score, () => {
+                    currentStageIndex++;
+                    proceedWorkflow();
+                });
+            } else {
+                currentStageIndex++;
+                proceedWorkflow();
+            }
+        };
+
+        window.addEventListener("message", (event) => {
+            if (event.data === "stageClear" || event.data.type === "stageClear") {
+                window.onStageClear();
+            }
+        });
+
+        // 初期実行
+        window.onload = () => {
+            if (API_KEY === "ここにあなたのGemini_APIキーを貼り付け") {
+                alert("index.html のソースコード内にある API_KEY を設定してください。");
+                return;
+            }
+            // スコアを毎回０からリセット
+            localStorage.setItem("gameScore", "0");
+            localStorage.setItem("game_score", "0");
+            proceedWorkflow();
+        };
+    </script>
+</body>
+</html>

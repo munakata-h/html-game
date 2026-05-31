@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>飛行機 vs お化け</title>
+<title>インベーダ！すぐに始まるのでキーボード準備！</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
 
@@ -137,18 +137,18 @@
 
 <div id="ui">
   <span>SCORE: <span id="score-display">0</span></span>
-  <span>飛行機 vs お化け</span>
+  <span>インベーダ風ゲーム</span>
   <span>LIVES: <span id="lives-display">３</span></span>
 </div>
 
 <div id="canvas-wrap">
   <canvas id="gameCanvas" width="800" height="560"></canvas>
   <div id="overlay">
-    <h1>飛行機 vs お化け</h1>
+    <h1>インベーダ風ゲーム</h1>
     <p>
       ← → キーで移動<br>
       スペースキーで弾を発射<br>
-      お化けを全滅させろ！
+      敵を全滅させろ！
     </p>
     <button onclick="startGame()">▶ スタート</button>
   </div>
@@ -178,15 +178,15 @@ const ENEMY_DROP = 12;
 
 const ENEMY_TYPES = {
   ghost: {
-    hp: 2,
+    hp: 3,
     bulletSpeed: 2,
     fireRate: 0.002,
     pattern: "straight"
   },
   slime: {
-    hp: 1,
+    hp: 2,
     bulletSpeed: 1,
-    fireRate: 0.00001,
+    fireRate: 0.00002,
     pattern: "slowWave"
   },
   bat: {

@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Score Attack Adventure</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
@@ -20,6 +20,13 @@ canvas{display:block;}
 #overlay button:hover{background:var(--green);color:#000;text-shadow:none;}
 @keyframes pulse{from{opacity:.7;transform:scale(.98)}to{opacity:1;transform:scale(1.02)}}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+/* タッチボタン */
+#touch-controls{display:none;justify-content:space-between;align-items:center;width:1024px;padding:8px 12px;margin-top:4px;user-select:none;}
+@media (pointer:coarse){#touch-controls{display:flex;}#controls{display:none;}}
+.touch-btn{width:72px;height:72px;border-radius:50%;border:3px solid rgba(255,255,255,0.5);background:rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;font-size:26px;cursor:pointer;color:#fff;-webkit-tap-highlight-color:transparent;touch-action:none;}
+.touch-btn.active{background:rgba(255,255,255,0.35);}
+#touch-jump{width:80px;height:80px;border-color:rgba(255,215,0,0.7);background:rgba(255,215,0,0.12);}
+#touch-jump.active{background:rgba(255,215,0,0.4);}
 </style>
 </head>
 <body>
@@ -37,6 +44,13 @@ canvas{display:block;}
   </div>
 </div>
 <div id="controls">← → : 移動 &nbsp;|&nbsp; SPACE / ↑ : ジャンプ</div>
+<div id="touch-controls">
+  <div style="display:flex;gap:8px;">
+    <div class="touch-btn" id="touch-left">◀</div>
+    <div class="touch-btn" id="touch-right">▶</div>
+  </div>
+  <div class="touch-btn" id="touch-jump">▲<br><span style="font-size:10px;font-family:'Press Start 2P',monospace;">JUMP</span></div>
+</div>
 <script>
 const canvas=document.getElementById('gameCanvas');
 const ctx=canvas.getContext('2d');
@@ -72,6 +86,19 @@ document.addEventListener('keydown',e=>{
   }
 });
 document.addEventListener('keyup',e=>keys[e.code]=false);
+// タッチボタン操作（キーボードの keys オブジェクトをそのまま使用）
+(function(){
+  function bindTouch(id,code){
+    const el=document.getElementById(id);
+    if(!el)return;
+    el.addEventListener('touchstart',e=>{e.preventDefault();keys[code]=true;el.classList.add('active');},{passive:false});
+    el.addEventListener('touchend',e=>{e.preventDefault();keys[code]=false;el.classList.remove('active');},{passive:false});
+    el.addEventListener('touchcancel',()=>{keys[code]=false;el.classList.remove('active');});
+  }
+  bindTouch('touch-left','ArrowLeft');
+  bindTouch('touch-right','ArrowRight');
+  bindTouch('touch-jump','Space');
+})();
 let score=100,startTime=null,gameRunning=false,gameResult=null;
 let comboCount=0; // 連続上昇カウント（倍率計算用）
 let gainedText='',gainedAt=0; // 獲得ポイント表示用（独立変数）

@@ -20,16 +20,19 @@ canvas{display:block;}
 #overlay button:hover{background:var(--green);color:#000;text-shadow:none;}
 @keyframes pulse{from{opacity:.7;transform:scale(.98)}to{opacity:1;transform:scale(1.02)}}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
-/* タッチボタン */
-#touch-controls{display:none;justify-content:space-between;align-items:center;width:1024px;padding:8px 12px;margin-top:4px;user-select:none;}
+/* スマホ縮小対応 */
+#scale-wrap{transform-origin:top center;width:1024px;}
+/* タッチボタン（スマホのみ表示） */
+#touch-controls{display:none;justify-content:space-between;align-items:center;width:100%;padding:8px 12px;margin-top:4px;user-select:none;box-sizing:border-box;}
 @media (pointer:coarse){#touch-controls{display:flex;}#controls{display:none;}}
-.touch-btn{width:72px;height:72px;border-radius:50%;border:3px solid rgba(255,255,255,0.5);background:rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;font-size:26px;cursor:pointer;color:#fff;-webkit-tap-highlight-color:transparent;touch-action:none;}
+.touch-btn{width:72px;height:72px;border-radius:50%;border:3px solid rgba(255,255,255,0.5);background:rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;font-size:26px;cursor:pointer;color:#fff;-webkit-tap-highlight-color:transparent;touch-action:none;flex-direction:column;}
 .touch-btn.active{background:rgba(255,255,255,0.35);}
 #touch-jump{width:80px;height:80px;border-color:rgba(255,215,0,0.7);background:rgba(255,215,0,0.12);}
 #touch-jump.active{background:rgba(255,215,0,0.4);}
 </style>
 </head>
 <body>
+<div id="scale-wrap">
 <div id="ui">
   <span>SCORE: <span id="score-display">100</span></span>
   <span>Score Attack Adventure</span>
@@ -44,6 +47,7 @@ canvas{display:block;}
   </div>
 </div>
 <div id="controls">← → : 移動 &nbsp;|&nbsp; SPACE / ↑ : ジャンプ</div>
+</div><!-- /scale-wrap -->
 <div id="touch-controls">
   <div style="display:flex;gap:8px;">
     <div class="touch-btn" id="touch-left">◀</div>
@@ -86,19 +90,6 @@ document.addEventListener('keydown',e=>{
   }
 });
 document.addEventListener('keyup',e=>keys[e.code]=false);
-// タッチボタン操作（キーボードの keys オブジェクトをそのまま使用）
-(function(){
-  function bindTouch(id,code){
-    const el=document.getElementById(id);
-    if(!el)return;
-    el.addEventListener('touchstart',e=>{e.preventDefault();keys[code]=true;el.classList.add('active');},{passive:false});
-    el.addEventListener('touchend',e=>{e.preventDefault();keys[code]=false;el.classList.remove('active');},{passive:false});
-    el.addEventListener('touchcancel',()=>{keys[code]=false;el.classList.remove('active');});
-  }
-  bindTouch('touch-left','ArrowLeft');
-  bindTouch('touch-right','ArrowRight');
-  bindTouch('touch-jump','Space');
-})();
 let score=100,startTime=null,gameRunning=false,gameResult=null;
 let comboCount=0; // 連続上昇カウント（倍率計算用）
 let gainedText='',gainedAt=0; // 獲得ポイント表示用（独立変数）
@@ -303,6 +294,30 @@ function loop(ts){
   update(elapsed);draw(elapsed);
   requestAnimationFrame(loop);
 }
+// ---- スマホ縮小スケール ----
+(function(){
+  function applyScale(){
+    const wrap=document.getElementById('scale-wrap');
+    const ratio=Math.min(1,window.innerWidth/1024);
+    wrap.style.transform='scale('+ratio+')';
+    wrap.style.marginBottom=(wrap.offsetHeight*(ratio-1))+'px';
+  }
+  applyScale();
+  window.addEventListener('resize',applyScale);
+})();
+// ---- タッチボタン操作 ----
+(function(){
+  function bindTouch(id,code){
+    const el=document.getElementById(id);
+    if(!el)return;
+    el.addEventListener('touchstart',e=>{e.preventDefault();keys[code]=true;el.classList.add('active');},{passive:false});
+    el.addEventListener('touchend',e=>{e.preventDefault();keys[code]=false;el.classList.remove('active');},{passive:false});
+    el.addEventListener('touchcancel',()=>{keys[code]=false;el.classList.remove('active');});
+  }
+  bindTouch('touch-left','ArrowLeft');
+  bindTouch('touch-right','ArrowRight');
+  bindTouch('touch-jump','Space');
+})();
 updateUI(LIMIT_TIME);
 requestAnimationFrame(loop);
 </script>

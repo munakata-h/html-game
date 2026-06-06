@@ -8,7 +8,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
 :root{--gold:#ffd700;--white:#fff;--red:#ff3232;--navy:#000080;--green:#00cc55;}
 *{margin:0;padding:0;box-sizing:border-box;}
-body{background:#1a1a2e;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;font-family:'Press Start 2P',monospace;color:#fff;overflow:hidden;}
+body{background:#1a1a2e;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;min-height:100vh;font-family:'Press Start 2P',monospace;color:#fff;overflow:hidden;}
 #ui{width:1024px;display:flex;justify-content:space-between;align-items:center;padding:8px 4px;font-size:11px;color:var(--gold);text-shadow:0 0 8px var(--gold);}
 #canvas-wrap{position:relative;border:2px solid var(--gold);box-shadow:0 0 20px rgba(255,215,0,0.4);}
 canvas{display:block;}
@@ -21,11 +21,11 @@ canvas{display:block;}
 @keyframes pulse{from{opacity:.7;transform:scale(.98)}to{opacity:1;transform:scale(1.02)}}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
 /* スマホ縮小対応 */
-#scale-wrap{transform-origin:top center;width:1024px;}
-/* タッチボタン（スマホのみ表示）01 */
-#touch-controls{display:none;justify-content:space-between;align-items:center;width:100%;padding:8px 12px;margin-top:4px;user-select:none;box-sizing:border-box;}
+#scale-wrap{transform-origin:top left;width:1024px;position:relative;left:0;}
+/* タッチボタン（スマホのみ、scale-wrapの外に置くため縮小されない） */
+#touch-controls{display:none;justify-content:space-between;align-items:center;width:100vw;padding:10px 16px;user-select:none;box-sizing:border-box;position:fixed;bottom:0;left:0;z-index:100;background:rgba(0,0,0,0.4);}
 @media (pointer:coarse){#touch-controls{display:flex;}#controls{display:none;}}
-.touch-btn{width:72px;height:72px;border-radius:50%;border:3px solid rgba(255,255,255,0.5);background:rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;font-size:26px;cursor:pointer;color:#fff;-webkit-tap-highlight-color:transparent;touch-action:none;flex-direction:column;}
+.touch-btn{width:72px;height:72px;border-radius:50%;border:3px solid rgba(255,255,255,0.5);background:rgba(255,255,255,0.1);display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:26px;cursor:pointer;color:#fff;-webkit-tap-highlight-color:transparent;touch-action:none;}
 .touch-btn.active{background:rgba(255,255,255,0.35);}
 #touch-jump{width:80px;height:80px;border-color:rgba(255,215,0,0.7);background:rgba(255,215,0,0.12);}
 #touch-jump.active{background:rgba(255,215,0,0.4);}
@@ -47,13 +47,13 @@ canvas{display:block;}
   </div>
 </div>
 <div id="controls">← → : 移動 &nbsp;|&nbsp; SPACE / ↑ : ジャンプ</div>
-</div><!-- /scale-wrap -->
+</div>
 <div id="touch-controls">
-  <div style="display:flex;gap:8px;">
+  <div style="display:flex;gap:10px;">
     <div class="touch-btn" id="touch-left">◀</div>
     <div class="touch-btn" id="touch-right">▶</div>
   </div>
-  <div class="touch-btn" id="touch-jump">▲<br><span style="font-size:10px;font-family:'Press Start 2P',monospace;">JUMP</span></div>
+  <div class="touch-btn" id="touch-jump">▲<br><span style="font-size:9px;font-family:'Press Start 2P',monospace;">JUMP</span></div>
 </div>
 <script>
 const canvas=document.getElementById('gameCanvas');
@@ -294,17 +294,26 @@ function loop(ts){
   update(elapsed);draw(elapsed);
   requestAnimationFrame(loop);
 }
-// ---- スマホ縮小スケール ----
+updateUI(LIMIT_TIME);
+requestAnimationFrame(loop);
+
+// ---- スマホ縮小スケール（CSSのtransformで縮小、leftで中央寄せ） ----
 (function(){
   function applyScale(){
     const wrap=document.getElementById('scale-wrap');
-    const ratio=Math.min(1,window.innerWidth/1024);
+    const vw=window.innerWidth;
+    const ratio=Math.min(1, vw/1024);
+    const scaledH=wrap.scrollHeight*ratio;
     wrap.style.transform='scale('+ratio+')';
-    wrap.style.marginBottom=(wrap.offsetHeight*(ratio-1))+'px';
+    // transform-origin:top left なので、右余白を相殺するためleftでセンタリング
+    wrap.style.left=((vw - 1024*ratio)/2)+'px';
+    // 縮小後の実際の高さに合わせてbodyの高さを調整（下に余白が出るのを防ぐ）
+    wrap.style.marginBottom=(scaledH - wrap.scrollHeight)+'px';
   }
   applyScale();
-  window.addEventListener('resize',applyScale);
+  window.addEventListener('resize', applyScale);
 })();
+
 // ---- タッチボタン操作 ----
 (function(){
   function bindTouch(id,code){
@@ -318,8 +327,6 @@ function loop(ts){
   bindTouch('touch-right','ArrowRight');
   bindTouch('touch-jump','Space');
 })();
-updateUI(LIMIT_TIME);
-requestAnimationFrame(loop);
 </script>
 </body>
 </html>
